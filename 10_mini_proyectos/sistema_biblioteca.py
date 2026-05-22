@@ -1,59 +1,50 @@
 # ============================================================
-# MINI PROYECTO — SISTEMA DE BIBLIOTECA
+# SISTEMA DE BIBLIOTECA — Clase principal (Vista + Lógica)
 # ============================================================
-# Este proyecto replica casi exactamente el Parcial 3 real de
-# Programación II (UTP — Ingeniería Electrónica).
-#
-# Funcionalidades:
-#  ✓ Agregar libros (código, título, autor, género, copias, físico/digital)
-#  ✓ Todos los campos obligatorios antes de guardar
-#  ✓ Persistencia en JSON (datos no se pierden al cerrar)
-#  ✓ Buscar por género
-#  ✓ Registrar préstamo y devolución
-#  ✓ Ver consolidado de préstamos por género
-#  ✓ Editar y eliminar libros
-#  ✓ Estructura OOP obligatoria
-#
-# Para ejecutar: python3 sistema_biblioteca.py
+# Importa las funciones de persistencia y las constantes de
+# archivos desde el módulo separado `persistencia`.
+# Para ejecutar la aplicación usa: python3 main.py
 # ============================================================
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-import json
-import os
-
-ARCHIVO_LIBROS    = "biblioteca_libros.json"
-ARCHIVO_PRESTAMOS = "biblioteca_prestamos.json"
-
-
-# ── Funciones de persistencia ─────────────────────────────
-
-def cargar_json(archivo):
-    if os.path.exists(archivo):
-        with open(archivo, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-def guardar_json(archivo, datos):
-    with open(archivo, "w", encoding="utf-8") as f:
-        json.dump(datos, f, indent=4, ensure_ascii=False)
+from persistencia import cargar_json, guardar_json, ARCHIVO_LIBROS, ARCHIVO_PRESTAMOS
 
 
 # ============================================================
-# APLICACIÓN PRINCIPAL
+# CLASE PRINCIPAL — SistemaBiblioteca
 # ============================================================
-
+# Hereda directamente de tk.Tk, lo que la convierte en la ventana
+# raíz de la aplicación (patrón OOP obligatorio en el parcial).
+# Al heredar de tk.Tk no necesitamos crear una ventana aparte:
+# la propia instancia de la clase ES la ventana principal.
 class SistemaBiblioteca(tk.Tk):
-
     def __init__(self):
+        """
+        Constructor de la clase — se ejecuta automáticamente al hacer
+        app = SistemaBiblioteca().
+
+        Responsabilidades:
+        1. super().__init__()  → inicializa la ventana raíz de Tkinter
+           (SIEMPRE debe ser la primera línea al heredar de tk.Tk).
+        2. Configura título, tamaño y color de fondo de la ventana.
+        3. Carga los datos persistidos desde los archivos JSON:
+           - self.libros    → lista de diccionarios con los libros.
+           - self.prestamos → lista de diccionarios con los préstamos.
+        4. self.indice_editando → guarda la posición en self.libros del
+           libro que está siendo editado (None = no hay edición activa).
+        5. Llama a _crear_pestanas() para construir toda la interfaz.
+        """
         super().__init__()
         self.title("Sistema de Gestión Biblioteca")
         self.geometry("800x600")
         self.configure(bg="#f0f4f8")
         self.resizable(True, True)
 
+        # Cargar datos desde JSON al iniciar (persistencia)
         self.libros    = cargar_json(ARCHIVO_LIBROS)
         self.prestamos = cargar_json(ARCHIVO_PRESTAMOS)
+        # Índice del libro en edición (None = modo creación)
         self.indice_editando = None
 
         self._crear_pestanas()
@@ -62,6 +53,15 @@ class SistemaBiblioteca(tk.Tk):
     # PESTAÑAS (Notebook)
     # ──────────────────────────────────────────────────────
     def _crear_pestanas(self):
+        """
+        Crea el widget ttk.Notebook (contenedor de pestañas) y agrega
+        los tres frames principales, uno por pestaña:
+          - frame_libros      → CRUD de libros
+          - frame_prestamos   → búsqueda y gestión de préstamos
+          - frame_consolidado → estadísticas por género
+        Después delega la construcción interna de cada pestaña a sus
+        propios métodos (_crear_tab_*).
+        """
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -85,6 +85,20 @@ class SistemaBiblioteca(tk.Tk):
     # PESTAÑA 1 — GESTIÓN DE LIBROS
     # ══════════════════════════════════════════════════════
     def _crear_tab_libros(self):
+        """
+        Construye visualmente la pestaña de Gestión de Libros.
+        Crea y posiciona:
+          - Un LabelFrame con el formulario de entrada (código, título,
+            autor, género, copias, formato físico/digital).
+          - Los botones: Agregar, Guardar edición, Eliminar y Limpiar.
+          - Un Treeview (tabla) que muestra todos los libros guardados,
+            con scrollbar vertical.
+          - Una etiqueta de estado para mostrar mensajes de feedback.
+        Los widgets de entrada se guardan como atributos (self.e_codigo,
+        self.e_titulo, etc.) para poder leerlos desde otros métodos.
+        El evento <Double-1> en la tabla llama a _cargar_libro_para_editar.
+        """
+
         parent = self.frame_libros
 
         tk.Label(parent, text="Registro de Libros", font=("Arial", 13, "bold"),
@@ -185,6 +199,18 @@ class SistemaBiblioteca(tk.Tk):
     # PESTAÑA 2 — PRÉSTAMOS
     # ══════════════════════════════════════════════════════
     def _crear_tab_prestamos(self):
+        """
+        Construye visualmente la pestaña de Gestión de Préstamos.
+        Crea y posiciona:
+          - Un LabelFrame con un Combobox para filtrar libros por género
+            y un botón "Buscar".
+          - Un Treeview que muestra los resultados de la búsqueda,
+            incluyendo las copias disponibles (totales - préstamos activos).
+          - Botones "Registrar préstamo" y "Registrar devolución" que
+            operan sobre el libro seleccionado en la tabla.
+          - Etiqueta de estado para mensajes de feedback.
+        """
+
         parent = self.frame_prestamos
 
         tk.Label(parent, text="Gestión de Préstamos", font=("Arial", 13, "bold"),
@@ -247,6 +273,17 @@ class SistemaBiblioteca(tk.Tk):
     # PESTAÑA 3 — CONSOLIDADO
     # ══════════════════════════════════════════════════════
     def _crear_tab_consolidado(self):
+        """
+        Construye visualmente la pestaña de Consolidado.
+        Crea y posiciona:
+          - Un botón "Actualizar consolidado" que recalcula las estadísticas.
+          - Un Treeview con 4 columnas: Género, Total Préstamos, Activos,
+            Devueltos.
+          - Una etiqueta que muestra el total general de préstamos.
+        La tabla se llena solo cuando el usuario presiona el botón,
+        mediante el método _actualizar_consolidado.
+        """
+
         parent = self.frame_consolidado
 
         tk.Label(parent, text="Consolidado de Préstamos por Género",
@@ -282,6 +319,17 @@ class SistemaBiblioteca(tk.Tk):
     # ──────────────────────────────────────────────────────
 
     def _agregar_libro(self):
+        """
+        Valida y agrega un nuevo libro a la lista self.libros.
+        Pasos:
+          1. Llama a _leer_form_libro() para obtener y validar los datos
+             del formulario. Si hay un error retorna None y se detiene.
+          2. Verifica que el código no esté duplicado (búsqueda con any()).
+          3. Agrega el diccionario del libro a self.libros.
+          4. Persiste la lista actualizada en el JSON.
+          5. Refresca la tabla y limpia el formulario.
+        """
+
         datos = self._leer_form_libro()
         if datos is None:
             return
@@ -299,6 +347,19 @@ class SistemaBiblioteca(tk.Tk):
         self.lbl_estado_libros.config(text=f"✓ '{datos['titulo']}' agregado.", fg="green")
 
     def _cargar_libro_para_editar(self, event):
+        """
+        Se ejecuta al hacer doble clic en una fila del Treeview de libros.
+        Responsabilidades:
+          1. Obtiene la fila seleccionada y extrae sus valores.
+          2. Busca el índice del libro en self.libros por código y lo
+             guarda en self.indice_editando para usarlo al guardar.
+          3. Carga los valores de la fila en los campos del formulario.
+          4. Deshabilita el campo Código (no se puede cambiar la PK).
+          5. Cambia el estado de los botones: desactiva "Agregar" y
+             activa "Guardar edición", poniendo la UI en modo edición.
+        Parámetro `event`: objeto de evento de Tkinter (requerido por
+        bind, pero no se usa directamente).
+        """
         sel = self.tabla_libros.selection()
         if not sel:
             return
@@ -324,6 +385,16 @@ class SistemaBiblioteca(tk.Tk):
         self.lbl_estado_libros.config(text="✏ Modo edición — modifica y presiona 'Guardar edición'.", fg="orange")
 
     def _guardar_edicion_libro(self):
+        """
+        Guarda los cambios realizados sobre el libro que está en edición.
+        Pasos:
+          1. Verifica que self.indice_editando no sea None (protección).
+          2. Lee y valida los campos editables (título, autor, copias).
+             El código NO se toca porque está deshabilitado.
+          3. Actualiza directamente el diccionario en self.libros usando
+             el índice guardado.
+          4. Persiste, refresca tabla y limpia el formulario.
+        """
         if self.indice_editando is None:
             return
         titulo = self.e_titulo.get().strip()
@@ -347,6 +418,16 @@ class SistemaBiblioteca(tk.Tk):
         self.lbl_estado_libros.config(text="✓ Libro actualizado.", fg="green")
 
     def _eliminar_libro(self):
+        """
+        Elimina el libro seleccionado en la tabla de libros.
+        Pasos:
+          1. Verifica que haya una fila seleccionada.
+          2. Pide confirmación con messagebox.askyesno (buena práctica
+             para operaciones destructivas).
+          3. Filtra self.libros con list comprehension descartando el
+             libro cuyo código coincida con el seleccionado.
+          4. Persiste la lista sin ese libro y refresca la tabla.
+        """
         sel = self.tabla_libros.selection()
         if not sel:
             messagebox.showwarning("Sin selección", "Selecciona un libro de la tabla.")
@@ -364,6 +445,17 @@ class SistemaBiblioteca(tk.Tk):
         self.lbl_estado_libros.config(text=f"✓ '{titulo}' eliminado.", fg="green")
 
     def _leer_form_libro(self):
+        """
+        Lee y valida todos los campos del formulario de libros.
+        - Usa .get().strip() para eliminar espacios accidentales.
+        - Verifica que ningún campo obligatorio esté vacío (all([...])).
+        - Verifica que el campo Copias sea un número entero no negativo.
+        Retorna:
+          - Un diccionario con los datos del libro si todo es válido.
+          - None si hay algún error (el llamador debe revisar esto).
+        Este patrón de retornar None en caso de error evita tener que
+        lanzar excepciones y simplifica el flujo en _agregar_libro.
+        """
         codigo  = self.e_codigo.get().strip()
         titulo  = self.e_titulo.get().strip()
         autor   = self.e_autor.get().strip()
@@ -384,6 +476,15 @@ class SistemaBiblioteca(tk.Tk):
                 "genero": genero, "copias": int(copias), "formato": formato}
 
     def _limpiar_form_libro(self):
+        """
+        Resetea el formulario de libros a su estado inicial vacío.
+        - Reactiva el campo Código (que se deshabilita en modo edición).
+        - Borra el contenido de todos los Entry.
+        - Restaura el Combobox y el Radiobutton a sus valores por defecto.
+        - Limpia self.indice_editando (sale del modo edición).
+        - Reactiva el botón "Agregar" y desactiva "Guardar edición".
+        Se llama después de agregar, guardar edición o eliminar un libro.
+        """
         self.e_codigo.config(state="normal")
         for e in [self.e_codigo, self.e_titulo, self.e_autor, self.e_copias]:
             e.delete(0, tk.END)
@@ -394,6 +495,13 @@ class SistemaBiblioteca(tk.Tk):
         self.btn_guardar_edicion.config(state="disabled")
 
     def _refrescar_tabla_libros(self):
+        """
+        Vuelve a pintar el Treeview de libros desde cero.
+        - Borra todas las filas existentes con delete(*get_children()).
+        - Itera self.libros e inserta cada libro como una nueva fila.
+        Se debe llamar siempre que self.libros cambie (agregar, editar,
+        eliminar) para mantener la vista sincronizada con los datos.
+        """
         self.tabla_libros.delete(*self.tabla_libros.get_children())
         for l in self.libros:
             self.tabla_libros.insert("", tk.END, values=(
@@ -406,6 +514,17 @@ class SistemaBiblioteca(tk.Tk):
     # ──────────────────────────────────────────────────────
 
     def _buscar_por_genero(self):
+        """
+        Filtra y muestra en la tabla de préstamos los libros que
+        corresponden al género seleccionado en el Combobox.
+        - Si se selecciona "Todos" no filtra y muestra todos los libros.
+        - Para cada libro calcula las copias disponibles en tiempo real:
+            copias_disponibles = copias_totales - préstamos_activos
+          donde préstamos_activos = registros en self.prestamos con
+          estado=='activo' y el mismo código de libro.
+        Esto permite ver cuántas copias quedan disponibles para prestar.
+        """
+
         genero = self.combo_genero_buscar.get()
         self.tabla_prestamos.delete(*self.tabla_prestamos.get_children())
 
@@ -422,6 +541,17 @@ class SistemaBiblioteca(tk.Tk):
                 ))
 
     def _registrar_prestamo(self):
+        """
+        Registra un nuevo préstamo del libro seleccionado en la tabla.
+        Pasos:
+          1. Verifica que haya una fila seleccionada.
+          2. Lee las copias disponibles de la tabla (columna índice 4).
+          3. Si copias_disp <= 0 muestra error (no se puede prestar).
+          4. Agrega un nuevo diccionario a self.prestamos con estado
+             'activo' para ese libro.
+          5. Persiste y actualiza la tabla para reflejar la nueva
+             disponibilidad.
+        """
         sel = self.tabla_prestamos.selection()
         if not sel:
             messagebox.showwarning("Sin selección", "Selecciona un libro de la lista.")
@@ -444,6 +574,18 @@ class SistemaBiblioteca(tk.Tk):
             text=f"✓ Préstamo registrado: '{titulo}'.", fg="green")
 
     def _registrar_devolucion(self):
+        """
+        Registra la devolución de una copia del libro seleccionado.
+        Pasos:
+          1. Verifica que haya una fila seleccionada.
+          2. Usa next() con una expresión generadora para encontrar el
+             PRIMER préstamo activo de ese libro en self.prestamos.
+             (next devuelve None si no encuentra ninguno.)
+          3. Si no hay préstamo activo muestra un aviso informativo.
+          4. Cambia el estado del préstamo encontrado a 'devuelto'
+             (modificación in-place del diccionario dentro de la lista).
+          5. Persiste y actualiza la tabla.
+        """
         sel = self.tabla_prestamos.selection()
         if not sel:
             messagebox.showwarning("Sin selección", "Selecciona un libro de la lista.")
@@ -476,6 +618,21 @@ class SistemaBiblioteca(tk.Tk):
     # ──────────────────────────────────────────────────────
 
     def _actualizar_consolidado(self):
+        """
+        Recalcula y muestra el resumen de préstamos agrupado por género.
+        Pasos:
+          1. Borra las filas actuales de la tabla consolidado.
+          2. Obtiene la lista de géneros únicos presentes en self.libros
+             usando set() y los ordena alfabéticamente con sorted().
+          3. Por cada género:
+             a. Obtiene el conjunto de códigos de libros de ese género.
+             b. Filtra self.prestamos para quedarse solo con los que
+                pertenecen a esos códigos.
+             c. Cuenta total, activos y devueltos con sum() y expresiones
+                generadoras (patrón eficiente en Python).
+          4. Inserta una fila por género en la tabla.
+          5. Actualiza la etiqueta con el total general acumulado.
+        """
         self.tabla_consolidado.delete(*self.tabla_consolidado.get_children())
 
         # Obtener géneros únicos de los libros
@@ -496,8 +653,3 @@ class SistemaBiblioteca(tk.Tk):
 
         self.lbl_total_consolidado.config(
             text=f"Total general de préstamos: {total_general}")
-
-
-if __name__ == "__main__":
-    app = SistemaBiblioteca()
-    app.mainloop()
